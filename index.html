@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Loto Online | Trò chơi dân gian.</title>
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="robots" content="noodp,index,follow" />
+	<meta name=’revisit-after’ content=’1 days’ />
+	<meta name="description" content="Lôtô là trò chơi dân gian giải trí việt nam, được tái hiện luật chơi hoàn toàn giống thực tế không biến tấu." />
+	<meta http-equiv="content-language" content="vi" />
+	<meta property="og:image" content="images/thumbnail.png">
+
+	<link rel="icon" type="image/x-icon" href="images/favicon.ico">
+	<link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
+	<link rel="stylesheet" type="text/css" href="css/style.css">
+	<link href="css/animate.min.css" rel="stylesheet"/>
+
+	<script type="text/javascript" src="js/vue.js"></script>
+	<script type="text/javascript" src="js/socket.io.min.js"></script>
+	<script type="text/javascript" src="js/const.js"></script>
+</head>
+<body>
+	<div id="app" class="bg-primary">
+
+		<div class="modal" v-if="show_modal" @click="e=> { if(e.target.classList.contains('modal')) show_modal = false }">
+			<div class="modal-container animated bounceIn">
+				<div class="modal-content" v-html="modal_content">
+				</div>
+				<div class="modal-close" @click="show_modal = false">x</div>
+			</div>
+		</div>
+
+		<div class="modal" v-if="show_modal_options" @click="e=> { if(e.target.classList.contains('modal')) show_modal_options = false }">
+			<div class="modal-container animated bounceIn">
+				<div class="modal-content">
+					<div class="modal-title">Cài đặt</div>
+					<div class="gird">
+						<div class="cols z-4" @click="_set_music(1)" :clr="cookie.music_1? 4: 1">
+							♫
+							<div>Nhạc nền</div>
+						</div>
+						<div class="cols z-4" @click="_set_music(2)" :clr="cookie.music_2? 4: 1">
+							♪
+							<div>Hiệu ứng</div>
+						</div>
+						<div class="cols z-4" @click="_set_music(3)" :clr="cookie.music_3? 4: 1">
+							♩
+							<div>Gọi số</div>
+						</div>
+					</div>
+				</div>
+				<div class="modal-close" @click="show_modal_options = false">x</div>
+			</div>
+		</div>
+
+		<div class="loading" v-if="show_loading">
+			<div class="overlay animated bounceIn">
+			    <div class="overlay__inner">
+			        <div class="overlay__content"><span class="spinner"></span></div>
+			    </div>
+			</div>
+		</div>
+		<!-- modal & loading -->
+
+		<div class="scene scene-login center text-white" v-if="scene == SCENES.LOGIN">
+			<div class="scene-header">
+				<div class="header-info text-white gird padding size z-3">
+					<div class="cols z-4 text-left">{{ LANGS.VERSION }}</div>
+					<div class="cols z-4">&nbsp;</div>
+					<div class="cols z-4 text-right">
+						{{ LANGS.HELP }}: {{ LANGS.TEL }}
+					</div>
+				</div>
+
+				<div class="header-logo text-third">
+					<h1 class="animated bounceIn">{{ LANGS.APP.NAME }}</h1>
+					<p>{{ LANGS.APP.DESC }}</p>
+				</div>
+			</div>
+
+			<div class="scene-body text-third">
+				<div class="box btns-action text-white">
+					<div class="btn btn-login animated bounceInLeft bg-third">
+						{{ LANGS.LOGIN }}
+					</div>
+					<div class="btn btn-guest animated bounceInRight bg-third" @click="login()">
+						{{ LANGS.GUEST }}
+					</div>
+				</div>
+			</div>
+
+			<div class="scene-footer padding z-2">
+				<label class="size z-3">CopyRight&copy;2022 - by <a href="#">Drhuy</a></label>
+			</div>
+
+		</div><!-- Login Scene -->
+
+		<div class="scene scene-servers center bg-third text-white" v-if="scene == SCENES.SERVERS">
+			<div class="scene-header flex-cols">
+				<div class="app-header center padding z-1">
+					<div class="btn btn-back" @click="goBack">⇦</div>
+					<label class="size z-5">{{ LANGS.APP.LIST }} {{ LANGS.APP.SERVER }}</label>
+					<div class="btn-fn flex padding z-2">
+						<div class="btn fn-icon" @click="_show_modal_options">⛭</div>
+					</div>
+				</div>
+
+				<div class="app-body bg-white gird padding z-2">
+
+					<div class="servers gird cols z-8 z-md-12">
+						<div class="server-item cols z-4 z-md-6" v-for="server in app.servers" @click="selectServer(server.id)">
+							<div class="server-item-container">
+								<div>{{ server.name }}</div>
+								<div class="server-item-content" :befull="server.nPlayers/limit_players >= 0.9" :full="server.nPlayers/limit_players >= 1">
+									<div class="server-process-backdrop" :style="'width:'+ ((server.nPlayers/limit_players*100 > 100)? 100: server.nPlayers/limit_players*100) +'%'"></div>
+									<label>{{ (server.nPlayers >= limit_players)? LANGS.APP.FULL : server.nPlayers + ' ' + LANGS.APP.ONLINE }}</label>
+								</div>
+							</div>
+						</div>
+
+						<div class="ads">sdfdsfs</div>
+
+					</div>
+
+					<div class="cols z-4 z-md-0 z-md-hide">dsfsdfssdf</div>
+
+				</div>
+
+			</div>
+		</div>
+		<!-- servers scene -->
+
+		<div class="scene scene-server center bg-third text-white" v-if="scene == SCENES.SERVER || scene == SCENES.ROOM">
+			<div class="scene-header flex-cols">
+
+				<div class="modal" v-if="show_modal_create" @click="e=> { if(e.target.classList.contains('modal')) show_modal_create = false }">
+					<div class="modal-container animated bounceIn">
+						<div class="modal-content">
+							<div class="modal-title">{{ LANGS.ROOM.CREATE }}</div>
+							<form @submit="_roomCreate">
+								<div class="form-group flex-cols">
+									<label>Cược: {{ nbet }}</label>
+									<input type="range" @input="e=> {app.nbet = e.target.value}" :value="nbet" min="0" :max="player.money? player.money: 10000">
+								</div>
+								<div class="form-group flex">
+									<div class="flex-cols" style="width: 100%">
+										<label>Thời gian: {{ ntime }}s/số</label>
+										<input type="range" @input="e=> {app.ntime = e.target.value}" :value="ntime" min="2" max="7">
+									</div>
+									<div class="center margin-v z-2 flex-cols" style="width: 100px;">
+										<label>Theo nhạc</label>
+										<input class="margin z-1" type="checkbox">
+									</div>
+								</div>
+								<div class="form-group flex-cols">
+									<label>Khóa phòng</label>
+									<input type="password" placeholder="Mật khẩu phòng">
+								</div>
+								<button class="btn bg-third text-white">{{ LANGS.ROOM.CREATE }}</button>
+							</form>
+						</div>
+						<div class="modal-close" @click="show_modal_create = false">x</div>
+					</div>
+				</div>
+				<!-- modal create room -->
+
+				<div class="app-header center padding z-1" v-if="scene == SCENES.SERVER">
+					<div class="btn fn-icon btn-back" @click="goBack">⇦</div>
+					<div class="flex-cols">
+						<label class="size z-3">{{ LANGS.APP.SERVER }}</label>
+						<label class="size z-5">{{ server.info.name }}</label>
+					</div>
+					<div class="btn-fn flex center">
+
+						<div class="btn fn-icon" @click="_show_modal_options">⛭</div>
+
+						<div class="btn sd fn-icon fn-icon-flex center" @click="_show_modal_create">
+							╋ <label class="z-md-hide">{{ LANGS.ROOM.CREATE }}</label>
+						</div>
+						<div class="btn fn-icon z-hide z-md-1" @click="_right_bar_active" :active="right_bar_active">{{ right_bar_active? '⛌':'☰' }}</div>
+					</div>
+				</div> <!-- server -->
+
+				<div class="app-header center padding z-1"  v-if="scene == SCENES.ROOM">
+					<div class="btn fn-icon btn-back" @click="goBack">⇦</div>
+					<div>
+						<div v-if="!room.info.ntime">{{ LANGS.APP.ROOM }}: #{{room.info.id}} - {{ money_format(room.info.nbet) }} - ♪</div>
+						<div v-if="room.info.ntime">{{ LANGS.APP.ROOM }}: #{{room.info.id}} - {{ money_format(room.info.nbet) }}/{{ room.info.ntime/1000 }}s</div>
+						<label class="header-title">{{ LANGS.ROOM.TOTAL }}: {{ money_format(room.info.nbet * room.info.nPages * fee) }}</label>
+					</div>
+					<div class="btn-fn flex padding z-2">
+
+						<div class="btn fn-icon" @click="_show_modal_options">⛭</div>
+
+						<div class="btn fn-icon z-hide z-md-3" @click="_right_bar_active" :active="right_bar_active">{{ right_bar_active? '⛌':'☰' }}</div>
+					</div>
+				</div> <!-- room -->
+				<div class="app-body bg-white text-black gird padding z-2 z-md-0">
+
+					<div class="rooms flex-cols cols z-8 z-md-12 flex-cols" v-if="scene == SCENES.SERVER">
+						<div class="gird z-0 z-md-1 padding flex" style="padding-bottom: 8px">
+							<div class="cols z-8 z-md-7 center" clr="3">
+								<marquee style="margin-right: 8px;" v-html="world_notify"></marquee>
+							</div>
+							<div class="cols z-4 z-md-5">
+								<form class="sign-box" @submit="_roomEnter">
+									<input :placeholder="LANGS.ROOM.ID + '...'" name="id_room">
+									<button>{{ LANGS.APP.INTO }}</button>
+								</form>
+							</div>
+						</div>
+
+						<div class="list bg-white text-black flex-cols">
+							<div class="gird room-item" v-for="room in server.rooms" :status="room[3]" @click="roomEnter(room[0])">
+								<div class="cols z-2 flex">
+									<label v-if="room[6]">🔐</label>
+									#{{ room[0] }}
+								</div>
+								<div class="cols z-2 z-md-3">{{ money_format(room[1]) }}</div>
+								<div class="cols z-2" v-if="!room[2]">♪</div>
+								<div class="cols z-2" v-if="room[2]">{{ room[2]/1000 }}s/số</div>
+								<div class="cols z-2 z-md-3">{{ money_format(room[1] * room[4] * fee) }}</div>
+								<div class="cols z-2 z-md-2">{{ room[5] }}</div>
+								<div class="cols z-2 z-md-0 z-md-hide">{{ status_to_string(room[3]) }}</div>
+							</div>
+						</div>
+					</div>	<!-- server -->
+
+
+					<div class="game flex-cols cols z-8 z-md-12" v-if="scene == SCENES.ROOM">
+						<div class="flex-cols padding z-0 z-md-2">
+							<div class="nums-called-container">
+								<div class="nums-called margin-v z-1 flex-rev">
+									<div class="num-container">
+										<div class="num size z-3 center animated bounceIn padding" v-for="num in room.numscalled">{{ num }}</div>
+									</div>
+								</div>
+								<div class="btn-buy padding z-1 center text-primary" v-if="!room.action_pages" @click="gameBuyPage">{{ LANGS.ROOM.BUY_PAGE }}</div>
+							</div>
+
+							<!-- game pages -->
+							<div class="game-pages flex-cols">
+								<div class="header gird" v-if="room._pages.length">
+									<div class="page-ids">
+										<div class="page-id padding z-2" :active="id==page_selected" v-for="id, i in room._pages" @click="_page_selected(id, i)">
+											{{ i + 1 }}
+										</div>
+									</div>
+									<div class="pages-viewed msg-icn size z-3 sd" v-if="room.action_pages">
+										{{ LANGS.GAME.VIEWEDs }}👀: {{ room.action_pages[1] }}
+										<div @click="gameGetPages()" clr="3" style="cursor: pointer;">{{ LANGS.APP.BACK }}</div>
+									</div>
+								</div>
+								<div class="pages flex-cols">
+									<div class="text-center n-wait padding z-4" v-if="n_wait[0]">
+										<div v-if="n_wait[1]" class="title">{{ LANGS.ROOM.WAIT_CHECK }}</div>
+										<div v-if="!n_wait[1]" class="title">{{ LANGS.ROOM.WAIT_START }}</div>
+										<label class="animated bounceIn">{{ n_wait[0] }}</label>
+									</div>
+
+									<label v-if="!room._pages.length" class="center flex-cols size z-8 text-white" style="text-shadow: 0 13px 6px #dfdfdf, -2px 3px 5px #b8b8b8;">{{ game_status }}</label>
+
+									<div v-if="!room.action_pages && room._pages.length" class="auto_check flex center padding-h z-2" style="position: absolute;top: 0; right: 0">
+										<input type="checkbox" class="margin-v z-1" id="auto_check" :checked="auto_check" @change="e=> {app.auto_check = e.target.checked}">
+										<label for="auto_check">{{ LANGS.GAME.AUTO_CHECK }}</label>
+									</div>
+
+									<div class="page flex-cols" v-for="page, id in room.pages" :active="page_selected == id">
+										<div class="page-header" v-if="!room.action_pages">
+											<div class="btn" @click="gameChangePage(id)">{{ LANGS.ROOM.CHANGE_PAGE }}</div>
+											<div class="btn" @click="gameCheckPage(id)">{{ LANGS.ROOM.CHECK_PAGE }}</div>
+										</div>
+										<div class="page-nums flex-cols">
+											<div v-for="(row, i) in page" :space="i%3==0 && i > 0" class="game-row table">
+												<div v-for="(num, j) in row">
+													<label class="table page-num" :num="num">
+														<input type="checkbox" :checked="room.o_numscalled[num]" class="num-checkbox" v-if="num">
+														<div class="center num">{{num}}</div>
+													</label>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div><!-- Room -->
+
+					<div class="app-body-right cols z-4 z-md-0 z-md-hide flex-cols" style="padding-left: 8px" :active="right_bar_active" @click="e=> {if(e.target.classList.contains('app-body-right')) _right_bar_active()}">
+
+						<div class="flex-cols app-body-right-container bg-white padding z-1">
+
+							<div class="gird padding z-1">
+								<div class="cols z-2 player-avatar">
+									<img src="images/a.png">
+								</div>
+								<div class="cols z-10 player-details" style="padding-left: 8px;">
+									<div class="player-name" clr="3">{{ player.username }}</div>
+									<div class="player-info flex">
+										{{ money_format(player.money) }} <label class="add-coin">╋</label>
+									</div>
+									<div v-if="player.nPages" class="player-roomId" @click="_gameGetPages(player.id)">👀 {{ player.nPages }}</div>
+								</div>
+							</div>
+							 <!-- me -->
+
+							<div class="players list" v-if="scene == SCENES.SERVER">
+
+								<div class="gird" v-for="_player in server.players" v-if="_player[0] != player.id">
+									<div class="cols z-2 player-avatar avatar2">
+										<img src="images/a1.png">
+										<div :online="_player[3]" class="player-online"></div>
+									</div>
+									<div class="cols z-10 player-details">
+										<div class="player-name">{{ _player[1] }}</div>
+										<div class="player-info">
+											{{ money_format(_player[2]) }}
+										</div>
+										<div v-if="_player[4]" class="player-roomId" @click="roomEnter(_player[4])">#{{_player[4]}}</div>
+									</div>
+								</div><!-- players -->
+
+							</div>
+
+							<div class="players list" v-if="scene == SCENES.ROOM">
+
+								<div class="gird" v-for="_player in room.players" v-if="player.id != _player[0]">
+									<div class="cols z-2 player-avatar avatar2">
+										<img src="images/a1.png">
+										<div :online="_player[3]" class="player-online"></div>
+									</div>
+									<div class="cols z-10 player-details">
+										<div class="player-name">{{ _player[1] }}</div>
+										<div class="player-info">
+											{{ money_format(_player[2]) }}
+										</div>
+										<div v-if="_player[5]" class="player-roomId" @click="_gameGetPages(_player[0])">👀 {{ _player[5] }}</div>
+										<div v-if="player.isRoomMaster" class="player-kick sd" @click="roomKickPlayer(_player[0])">x</div>
+									</div>
+								</div><!-- players -->
+
+							</div>
+							
+							<div class="chatbox">
+								<div class="chatbox-container">
+								   <div class="chat-contents padding z-2">
+								   	<div>
+								   		<div class="chat-item" v-for="chat in chat_contents" :clr="chat[2]">
+								   			<b v-if="chat[0]">{{ chat[0] }}: </b><label>{{ chat[1] }}</label>
+								   		</div>
+								   	</div>
+								   </div>
+								   <form class="chatbox-msg sign-box" @submit="chat">
+								   		<input type="text" :placeholder="LANGS.APP.CHAT_HOLD"/>
+								   		<button class="btn btn-send padding z-1">{{ LANGS.APP.SEND }}</button>
+								   </form>
+								</div>
+							</div>
+							<!-- chatbox -->
+						</div>
+
+					</div>
+
+				</div>
+			</div>
+		</div>
+
+		<!-- server scene -->
+	</div>
+
+	<script type="text/javascript" src="js/script.js"></script>
+	<script type="text/javascript">
+	</script>
+</body>
+</html>
